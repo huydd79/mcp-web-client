@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-950">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP Web Client</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom scrollbar for result pane */
+    .result-scroll::-webkit-scrollbar { width: 6px; }
+    .result-scroll::-webkit-scrollbar-track { background: #1f2937; }
+    .result-scroll::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+    /* Spinner animation */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 0.8s linear infinite; display: inline-block; }
+    /* Fade-in */
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.25s ease forwards; }
+    /* Tool card hover */
+    .tool-card:hover { border-color: #6366f1; }
+  </style>
+</head>
+<body class="h-full text-gray-100 font-mono">
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">M</div>
+    <div>
+      <h1 class="text-base font-semibold text-white leading-none">MCP Web Client</h1>
+      <p class="text-xs text-gray-400 mt-0.5">Model Context Protocol tester</p>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <!-- Auth status badge -->
+    {% if authenticated %}
+      <div class="flex items-center gap-2 bg-green-900/40 border border-green-700 rounded-full px-3 py-1 text-xs text-green-400">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+        Authenticated{% if user_email %} · {{ user_email }}{% endif %}
+      </div>
+      <a href="/logout"
+         class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors">
+        Log out
+      </a>
+    {% else %}
+      <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-full px-3 py-1 text-xs text-gray-400">
+        <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+        Not authenticated
+      </div>
+      <a href="/login"
+         class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg transition-colors font-medium">
+        Log in via OAuth
+      </a>
+    {% endif %}
+  </div>
+</header>
+
+<!-- ── Main layout ─────────────────────────────────────────────────────────── -->
+<div class="flex h-[calc(100vh-65px)]">
+
+  <!-- Left panel: server info + tools list -->
+  <aside class="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+
+    <!-- Server info -->
+    <div class="px-4 py-3 border-b border-gray-800">
+      <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">MCP Server</p>
+      <p class="text-xs text-indigo-300 break-all leading-relaxed" id="server-url">{{ mcp_server_url }}</p>
+      <span class="inline-block mt-1.5 text-xs bg-gray-800 text-gray-400 border border-gray-700 rounded px-2 py-0.5">
+        {{ mcp_transport }}
+      </span>
+    </div>
+
+    <!-- List tools button -->
+    <div class="px-4 py-3 border-b border-gray-800">
+      {% if authenticated %}
+        <button id="btn-list-tools" onclick="listTools()"
+          class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
+          </svg>
+          Connect &amp; List Tools
+        </button>
+      {% else %}
+        <button disabled
+          class="w-full bg-gray-800 text-gray-600 text-sm py-2 rounded-lg cursor-not-allowed">
+          Log in to connect
+        </button>
+      {% endif %}
+    </div>
+
+    <!-- Tools list -->
+    <div class="flex-1 overflow-y-auto px-4 py-3 result-scroll" id="tools-container">
+      <p class="text-xs text-gray-600 text-center mt-8">Tools will appear here after connecting.</p>
+    </div>
+  </aside>
+
+  <!-- Right panel: tool executor + result -->
+  <main class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Tool executor -->
+    <section class="border-b border-gray-800 bg-gray-900" id="executor-section">
+      <div class="px-6 py-4">
+        <h2 class="text-sm font-semibold text-gray-300 mb-1">Execute Tool</h2>
+        <p class="text-xs text-gray-500" id="executor-hint">Select a tool from the list on the left.</p>
+      </div>
+
+      <!-- Dynamic form injected here by JS -->
+      <div id="executor-form" class="px-6 pb-4 hidden">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Tool</span>
+            <p class="text-sm font-semibold text-indigo-300" id="selected-tool-name"></p>
+          </div>
+          <button onclick="clearExecutor()"
+            class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            ✕ Clear
+          </button>
+        </div>
+
+        <!-- Arguments JSON editor -->
+        <label class="block text-xs text-gray-400 mb-1">Arguments <span class="text-gray-600">(JSON)</span></label>
+        <textarea id="tool-args" rows="6"
+          class="w-full bg-gray-800 border border-gray-700 focus:border-indigo-500 outline-none rounded-lg px-3 py-2 text-sm text-gray-100 font-mono resize-y transition-colors"
+          placeholder='{ "param": "value" }'></textarea>
+
+        <!-- Schema hint -->
+        <div id="schema-hint" class="mt-2 text-xs text-gray-600 leading-relaxed hidden">
+          <span class="text-gray-500 font-medium">Schema:</span>
+          <pre id="schema-text" class="mt-1 overflow-x-auto text-gray-600 whitespace-pre-wrap"></pre>
+        </div>
+
+        <div class="flex gap-2 mt-3">
+          <button onclick="callTool()"
+            id="btn-call-tool"
+            class="flex-1 bg-emerald-700 hover:bg-emerald-600 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Execute
+          </button>
+          <button onclick="toggleSchema()"
+            id="btn-schema"
+            class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 text-sm px-4 py-2 rounded-lg transition-colors">
+            Schema
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Result pane -->
+    <section class="flex-1 flex flex-col overflow-hidden bg-gray-950 px-6 py-4">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-gray-300">Result</h2>
+        <button onclick="clearResult()" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">Clear</button>
+      </div>
+      <div id="result-pane"
+        class="flex-1 overflow-y-auto bg-gray-900 border border-gray-800 rounded-lg p-4 result-scroll">
+        <p class="text-xs text-gray-700">No result yet.</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── JavaScript ─────────────────────────────────────────────────────────── -->
+<script>
+  let selectedTool = null;   // { name, description, inputSchema }
+  let schemaVisible = false;
+
+  /* ── List tools ─────────────────────────────────────────────────── */
+  async function listTools() {
+    const btn    = document.getElementById('btn-list-tools');
+    const container = document.getElementById('tools-container');
+
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner">⟳</span> Connecting…`;
+    container.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">Connecting to MCP server…</p>';
+
+    try {
+      const resp = await fetch('/api/tools');
+      const data = await resp.json();
+
+      if (!resp.ok || data.error) {
+        showError(container, data.error || 'Unknown error');
+        return;
+      }
+
+      renderTools(data.tools);
+    } catch (e) {
+      showError(container, e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
+        </svg>
+        Refresh Tools`;
+    }
+  }
+
+  function renderTools(tools) {
+    const container = document.getElementById('tools-container');
+
+    if (!tools || tools.length === 0) {
+      container.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">Server returned no tools.</p>';
+      return;
+    }
+
+    container.innerHTML = `<p class="text-xs text-gray-500 mb-3">${tools.length} tool${tools.length !== 1 ? 's' : ''} available</p>`;
+
+    tools.forEach(tool => {
+      const card = document.createElement('div');
+      card.className = 'tool-card cursor-pointer bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded-lg p-3 mb-2 transition-colors fade-in';
+      card.onclick = () => selectTool(tool);
+      card.innerHTML = `
+        <p class="text-sm font-semibold text-indigo-300 leading-none mb-1">${escHtml(tool.name)}</p>
+        <p class="text-xs text-gray-400 leading-relaxed line-clamp-2">${escHtml(tool.description || 'No description')}</p>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  /* ── Select a tool ──────────────────────────────────────────────── */
+  function selectTool(tool) {
+    selectedTool = tool;
+    document.getElementById('selected-tool-name').textContent = tool.name;
+    document.getElementById('executor-hint').classList.add('hidden');
+    document.getElementById('executor-form').classList.remove('hidden');
+
+    // Pre-fill args textarea with empty object or example skeleton
+    const schema = tool.inputSchema || {};
+    const props  = schema.properties || {};
+    const example = {};
+    Object.entries(props).forEach(([k, v]) => {
+      if      (v.type === 'string')  example[k] = '';
+      else if (v.type === 'number' || v.type === 'integer') example[k] = 0;
+      else if (v.type === 'boolean') example[k] = false;
+      else if (v.type === 'array')   example[k] = [];
+      else                           example[k] = null;
+    });
+    document.getElementById('tool-args').value =
+      Object.keys(example).length ? JSON.stringify(example, null, 2) : '{}';
+
+    // Populate schema hint
+    document.getElementById('schema-text').textContent =
+      JSON.stringify(schema, null, 2);
+    schemaVisible = false;
+    document.getElementById('schema-hint').classList.add('hidden');
+
+    // Clear previous result
+    document.getElementById('result-pane').innerHTML =
+      '<p class="text-xs text-gray-700">No result yet.</p>';
+  }
+
+  function clearExecutor() {
+    selectedTool = null;
+    document.getElementById('executor-form').classList.add('hidden');
+    document.getElementById('executor-hint').classList.remove('hidden');
+    document.getElementById('executor-hint').textContent = 'Select a tool from the list on the left.';
+  }
+
+  function toggleSchema() {
+    schemaVisible = !schemaVisible;
+    const hint = document.getElementById('schema-hint');
+    hint.classList.toggle('hidden', !schemaVisible);
+  }
+
+  /* ── Call tool ──────────────────────────────────────────────────── */
+  async function callTool() {
+    if (!selectedTool) return;
+
+    let args = {};
+    const raw = document.getElementById('tool-args').value.trim();
+    if (raw && raw !== '{}') {
+      try {
+        args = JSON.parse(raw);
+      } catch (e) {
+        showResultError('Invalid JSON in arguments: ' + e.message);
+        return;
+      }
+    }
+
+    const btn = document.getElementById('btn-call-tool');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner">⟳</span> Running…';
+
+    const resultPane = document.getElementById('result-pane');
+    resultPane.innerHTML = '<p class="text-xs text-gray-500 animate-pulse">Executing…</p>';
+
+    try {
+      const resp = await fetch('/api/call-tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool_name: selectedTool.name, arguments: args }),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok || data.error) {
+        showResultError(data.error || 'Unknown error');
+        return;
+      }
+
+      renderResult(data);
+    } catch (e) {
+      showResultError(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        Execute`;
+    }
+  }
+
+  /* ── Render helpers ─────────────────────────────────────────────── */
+  function renderResult(data) {
+    const pane = document.getElementById('result-pane');
+    const isError = data.isError;
+
+    let html = `
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs font-semibold ${isError ? 'text-red-400' : 'text-emerald-400'}">
+          ${isError ? '✗ Tool returned an error' : '✓ Success'}
+        </span>
+        <span class="text-xs text-gray-600">${new Date().toLocaleTimeString()}</span>
+      </div>`;
+
+    (data.content || []).forEach((item, i) => {
+      if (item.type === 'text') {
+        // Try to pretty-print JSON text responses
+        let display = item.text;
+        try {
+          const parsed = JSON.parse(item.text);
+          display = JSON.stringify(parsed, null, 2);
+        } catch {}
+        html += `
+          <div class="fade-in mb-2">
+            <span class="text-xs text-gray-600 uppercase tracking-wider">text</span>
+            <pre class="mt-1 text-sm text-gray-200 whitespace-pre-wrap break-all leading-relaxed">${escHtml(display)}</pre>
+          </div>`;
+      } else {
+        html += `
+          <div class="fade-in mb-2">
+            <span class="text-xs text-gray-600 uppercase tracking-wider">${escHtml(item.type || 'blob')}</span>
+            <pre class="mt-1 text-xs text-gray-400 overflow-x-auto">${escHtml(JSON.stringify(item, null, 2))}</pre>
+          </div>`;
+      }
+    });
+
+    if (!data.content || data.content.length === 0) {
+      html += '<p class="text-xs text-gray-600">Tool returned empty content.</p>';
+    }
+
+    pane.innerHTML = html;
+  }
+
+  function showError(el, msg) {
+    el.innerHTML = `<p class="text-xs text-red-400 mt-4">Error: ${escHtml(msg)}</p>`;
+  }
+
+  function showResultError(msg) {
+    document.getElementById('result-pane').innerHTML =
+      `<div class="flex gap-2 items-start">
+        <span class="text-red-400 text-sm mt-0.5">✗</span>
+        <pre class="text-sm text-red-300 whitespace-pre-wrap break-all">${escHtml(msg)}</pre>
+      </div>`;
+  }
+
+  function clearResult() {
+    document.getElementById('result-pane').innerHTML =
+      '<p class="text-xs text-gray-700">No result yet.</p>';
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>

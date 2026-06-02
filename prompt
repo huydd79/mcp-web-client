@@ -1,0 +1,17 @@
+Tôi muốn xây dựng một ứng dụng Web Client bằng Python, đóng vai trò là một MCP Client (Model Context Protocol) dùng để test kết nối và tính năng của một MCP Server (chạy qua transport layer là HTTP/SSE). 
+
+Ứng dụng cần tích hợp cơ chế xác thực OAuth 2.1 Authorization Code Flow. Sau khi xác thực thành công và có Access Token, Client sẽ sử dụng token này để:
+1. Kết nối đến MCP Server.
+2. Quét và hiển thị danh sách các Tools mà MCP Server đó cung cấp (List Tools).
+3. Cho phép người dùng gửi tham số để thực thi (Call Tool) một lệnh test bất kỳ từ danh sách.
+
+Yêu cầu về mặt kỹ thuật và cấu trúc:
+- Framework: Sử dụng FastAPI (hoặc Streamlit để có giao diện UI trực quan nhanh chóng, hãy chọn cái tối ưu nhất cho việc test).
+- Thư viện MCP: Sử dụng thư viện `mcp` chính thức của Python (hoặc xử lý qua HTTP/SSE Client nếu cần tùy biến với OAuth Token).
+- Cấu trúc đầu ra: Hãy cung cấp toàn bộ mã nguồn rõ ràng, bao gồm:
+  1. File code ứng dụng chính (`main.py` hoặc `app.py`).
+  2. File `requirements.txt` chứa các thư viện cần thiết.
+  3. File `Dockerfile` cấu hình hoàn chỉnh để đóng gói ứng dụng.
+  4. File `docker-compose.yml` (nếu cần thiết để giả lập hoặc cấu hình các biến môi trường như CLIENT_ID, CLIENT_SECRET, MCP_SERVER_URL).
+
+Hãy viết code sạch, có comment giải thích các bước cấu hình luồng OAuth và luồng gọi MCP Tool, đảm bảo có thể build và chạy ngay trên Docker container.

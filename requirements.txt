@@ -1,0 +1,17 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+jinja2==3.1.4
+python-multipart==0.0.12
+
+# Session middleware (signs & encrypts the session cookie)
+itsdangerous==2.2.0
+starlette==0.41.3
+
+# HTTP client used for OAuth token exchange
+httpx==0.28.0
+
+# Official MCP Python SDK (includes SSE + Streamable HTTP transports)
+# Pin to >=1.0 for stable ClientSession + sse_client API
+# Upgrade to >=1.2 to enable MCP_TRANSPORT=streamable_http
+mcp>=1.0.0,<2.0.0

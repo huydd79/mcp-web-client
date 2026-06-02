@@ -1,0 +1,71 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP Web Client – docker-compose
+#
+# Usage:
+#   1. Copy .env.example → .env and fill in your values.
+#   2. docker compose up --build
+#   3. Open http://localhost:8000
+#
+# If your MCP Server also runs in Docker, add it as a second service below
+# and set MCP_SERVER_URL=http://mcp-server:PORT/sse
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  mcp-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-web-client:latest
+    container_name: mcp-web-client
+
+    ports:
+      - "8000:8000"
+
+    # Load all OAuth + MCP configuration from the .env file.
+    # Every key listed here can be overridden by the .env file OR by
+    # an explicit `environment:` key below for local dev convenience.
+    env_file:
+      - .env
+
+    environment:
+      # ── OAuth 2.1 (Authorization Code + PKCE) ──────────────────────────────
+      # CLIENT_ID and CLIENT_SECRET must come from .env (do NOT commit secrets).
+      # REDIRECT_URI must match the URI registered in your OAuth provider.
+      REDIRECT_URI: "http://localhost:8000/callback"
+
+      # ── MCP Server ─────────────────────────────────────────────────────────
+      # Point this to wherever your MCP Server is reachable FROM the container.
+      # If the server is on the host machine, use host.docker.internal (Mac/Win)
+      # or the container's gateway IP (Linux).
+      MCP_SERVER_URL: "${MCP_SERVER_URL:-http://host.docker.internal:8001/sse}"
+
+      # Transport layer: "sse" (default) | "streamable_http"
+      MCP_TRANSPORT: "${MCP_TRANSPORT:-sse}"
+
+    # Regenerate SECRET_KEY via: python -c "import secrets; print(secrets.token_hex(32))"
+    # and put it in .env.  Never use the default in production.
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Uncomment the block below to add a mock MCP server for local testing.
+# Replace the image / command with your actual MCP server.
+# ─────────────────────────────────────────────────────────────────────────────
+#  mcp-server:
+#    image: your-mcp-server-image:latest
+#    container_name: mcp-server
+#    ports:
+#      - "8001:8001"
+#    environment:
+#      PORT: 8001
