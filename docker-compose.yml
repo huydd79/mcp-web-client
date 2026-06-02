@@ -23,26 +23,9 @@ services:
     ports:
       - "8000:8000"
 
-    # Load all OAuth + MCP configuration from the .env file.
-    # Every key listed here can be overridden by the .env file OR by
-    # an explicit `environment:` key below for local dev convenience.
+    # All configuration (REDIRECT_URI, MCP_SERVER_URL, etc.) is read from .env
     env_file:
       - .env
-
-    environment:
-      # ── OAuth 2.1 (Authorization Code + PKCE) ──────────────────────────────
-      # CLIENT_ID and CLIENT_SECRET must come from .env (do NOT commit secrets).
-      # REDIRECT_URI must match the URI registered in your OAuth provider.
-      REDIRECT_URI: "http://localhost:8000/callback"
-
-      # ── MCP Server ─────────────────────────────────────────────────────────
-      # Point this to wherever your MCP Server is reachable FROM the container.
-      # If the server is on the host machine, use host.docker.internal (Mac/Win)
-      # or the container's gateway IP (Linux).
-      MCP_SERVER_URL: "${MCP_SERVER_URL:-http://host.docker.internal:8001/sse}"
-
-      # Transport layer: "sse" (default) | "streamable_http"
-      MCP_TRANSPORT: "${MCP_TRANSPORT:-sse}"
 
     # Regenerate SECRET_KEY via: python -c "import secrets; print(secrets.token_hex(32))"
     # and put it in .env.  Never use the default in production.
