@@ -29,7 +29,6 @@ from fastapi.templating import Jinja2Templates
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from starlette.middleware.sessions import SessionMiddleware
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # ── Streamable HTTP transport (MCP spec ≥ 2025-11-05) ────────────────────────
 try:
@@ -51,20 +50,15 @@ OAUTH_TOKEN_URL = os.getenv("OAUTH_TOKEN_URL", "https://auth.example.com/token")
 REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8000/callback")
 OAUTH_SCOPE = os.getenv("OAUTH_SCOPE", "openid profile")
 SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
-# Set HTTPS_ONLY=true when running behind an HTTPS reverse proxy (nginx, Traefik, etc.)
-# This adds the Secure flag to the session cookie so the browser only sends it over HTTPS.
-HTTPS_ONLY = os.getenv("HTTPS_ONLY", "false").lower() == "true"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # App setup
 # ─────────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="MCP Web Client", docs_url="/docs")
 
-# ProxyHeadersMiddleware must be outermost (added last) so it runs first on each
-# request and rewrites host/scheme from X-Forwarded-Proto/X-Forwarded-For before
-# SessionMiddleware reads them.
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=3600, https_only=HTTPS_ONLY)
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+# Session middleware stores OAuth tokens server-side in signed cookies.
+# max_age=3600 → sessions expire after 1 hour.
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=3600)
 
 templates = Jinja2Templates(directory="templates")
 
