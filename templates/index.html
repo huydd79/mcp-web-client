@@ -6,18 +6,18 @@
   <title>MCP Web Client</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Custom scrollbar for result pane */
     .result-scroll::-webkit-scrollbar { width: 6px; }
     .result-scroll::-webkit-scrollbar-track { background: #1f2937; }
     .result-scroll::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
-    /* Spinner animation */
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { animation: spin 0.8s linear infinite; display: inline-block; }
-    /* Fade-in */
     @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
     .fade-in { animation: fadeIn 0.25s ease forwards; }
-    /* Tool card hover */
-    .tool-card:hover { border-color: #6366f1; }
+    .item-card { border-color: #374151; }
+    .item-card:hover { border-color: #6366f1; }
+    .tab-active { color: #818cf8; border-bottom: 2px solid #6366f1; background: transparent; }
+    .tab-inactive { color: #6b7280; border-bottom: 2px solid transparent; }
+    .tab-inactive:hover { color: #9ca3af; }
   </style>
 </head>
 <body class="h-full text-gray-100 font-mono">
@@ -28,12 +28,11 @@
     <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">M</div>
     <div>
       <h1 class="text-base font-semibold text-white leading-none">MCP Web Client</h1>
-      <p class="text-xs text-gray-400 mt-0.5">Model Context Protocol tester</p>
+      <p class="text-xs text-gray-400 mt-0.5">Model Context Protocol tester - by Huy Do - hdo@paloaltonetworks.com</p>
     </div>
   </div>
 
   <div class="flex items-center gap-3">
-    <!-- Auth status badge -->
     {% if authenticated %}
       <div class="flex items-center gap-2 bg-green-900/40 border border-green-700 rounded-full px-3 py-1 text-xs text-green-400">
         <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
@@ -59,28 +58,56 @@
 <!-- ── Main layout ─────────────────────────────────────────────────────────── -->
 <div class="flex h-[calc(100vh-65px)]">
 
-  <!-- Left panel: server info + tools list -->
+  <!-- ── Left panel ─────────────────────────────────────────────────────── -->
   <aside class="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
 
-    <!-- Server info -->
-    <div class="px-4 py-3 border-b border-gray-800">
-      <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">MCP Server</p>
-      <p class="text-xs text-indigo-300 break-all leading-relaxed" id="server-url">{{ mcp_server_url }}</p>
-      <span class="inline-block mt-1.5 text-xs bg-gray-800 text-gray-400 border border-gray-700 rounded px-2 py-0.5">
+    <!-- Server info (display mode) -->
+    <div id="server-display" class="px-4 py-3 border-b border-gray-800">
+      <div class="flex items-center justify-between mb-1.5">
+        <p class="text-xs text-gray-500 uppercase tracking-wider">MCP Server</p>
+        <button onclick="toggleServerEdit()"
+          class="text-xs text-gray-600 hover:text-indigo-400 transition-colors">Edit</button>
+      </div>
+      <p id="display-url" class="text-xs text-indigo-300 break-all leading-relaxed">{{ mcp_server_url }}</p>
+      <span id="display-transport"
+        class="inline-block mt-1.5 text-xs bg-gray-800 text-gray-400 border border-gray-700 rounded px-2 py-0.5">
         {{ mcp_transport }}
       </span>
     </div>
 
-    <!-- List tools button -->
+    <!-- Server info (edit mode) -->
+    <div id="server-edit" class="px-4 py-3 border-b border-gray-800 hidden">
+      <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">MCP Server</p>
+      <input id="input-url" type="text" value="{{ mcp_server_url }}"
+        class="w-full bg-gray-800 border border-gray-700 focus:border-indigo-500 outline-none rounded-lg px-2 py-1.5 text-xs text-gray-100 font-mono mb-2 transition-colors"
+        placeholder="https://host/mcp/server" />
+      <select id="input-transport"
+        class="w-full bg-gray-800 border border-gray-700 focus:border-indigo-500 outline-none rounded-lg px-2 py-1.5 text-xs text-gray-100 mb-3 transition-colors">
+        <option value="streamable_http" {% if mcp_transport == 'streamable_http' %}selected{% endif %}>streamable_http</option>
+        <option value="sse" {% if mcp_transport == 'sse' %}selected{% endif %}>sse</option>
+      </select>
+      <div class="flex gap-2">
+        <button onclick="applyServerConfig()"
+          class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs py-1.5 rounded-lg transition-colors font-medium">
+          Apply
+        </button>
+        <button onclick="toggleServerEdit()"
+          class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs px-3 py-1.5 rounded-lg transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+
+    <!-- Connect button -->
     <div class="px-4 py-3 border-b border-gray-800">
       {% if authenticated %}
-        <button id="btn-list-tools" onclick="listTools()"
+        <button id="btn-connect" onclick="connectAll()"
           class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
           </svg>
-          Connect &amp; List Tools
+          Connect &amp; Load All
         </button>
       {% else %}
         <button disabled
@@ -90,63 +117,126 @@
       {% endif %}
     </div>
 
-    <!-- Tools list -->
-    <div class="flex-1 overflow-y-auto px-4 py-3 result-scroll" id="tools-container">
-      <p class="text-xs text-gray-600 text-center mt-8">Tools will appear here after connecting.</p>
+    <!-- Tab bar -->
+    <div class="flex border-b border-gray-800 text-xs">
+      <button id="tab-btn-tools"     onclick="switchTab('tools')"
+        class="flex-1 py-2 px-1 tab-active transition-colors">
+        Tools <span id="tab-cnt-tools" class="text-gray-500"></span>
+      </button>
+      <button id="tab-btn-prompts"   onclick="switchTab('prompts')"
+        class="flex-1 py-2 px-1 tab-inactive transition-colors">
+        Prompts <span id="tab-cnt-prompts" class="text-gray-500"></span>
+      </button>
+      <button id="tab-btn-resources" onclick="switchTab('resources')"
+        class="flex-1 py-2 px-1 tab-inactive transition-colors">
+        Rsrc <span id="tab-cnt-resources" class="text-gray-500"></span>
+      </button>
+    </div>
+
+    <!-- Tab panels -->
+    <div class="flex-1 overflow-y-auto result-scroll">
+      <div id="panel-tools" class="px-4 py-3">
+        <p class="text-xs text-gray-600 text-center mt-8">Click Connect to load.</p>
+      </div>
+      <div id="panel-prompts" class="px-4 py-3 hidden">
+        <p class="text-xs text-gray-600 text-center mt-8">Click Connect to load.</p>
+      </div>
+      <div id="panel-resources" class="px-4 py-3 hidden">
+        <p class="text-xs text-gray-600 text-center mt-8">Click Connect to load.</p>
+      </div>
     </div>
   </aside>
 
-  <!-- Right panel: tool executor + result -->
+  <!-- ── Right panel ─────────────────────────────────────────────────────── -->
   <main class="flex-1 flex flex-col overflow-hidden">
 
-    <!-- Tool executor -->
-    <section class="border-b border-gray-800 bg-gray-900" id="executor-section">
-      <div class="px-6 py-4">
-        <h2 class="text-sm font-semibold text-gray-300 mb-1">Execute Tool</h2>
-        <p class="text-xs text-gray-500" id="executor-hint">Select a tool from the list on the left.</p>
+    <!-- Executor section -->
+    <section class="border-b border-gray-800 bg-gray-900">
+
+      <!-- Empty state -->
+      <div id="executor-empty" class="px-6 py-4">
+        <h2 class="text-sm font-semibold text-gray-300 mb-1">Execute / Read</h2>
+        <p class="text-xs text-gray-500">Select a tool, prompt, or resource from the list.</p>
       </div>
 
-      <!-- Dynamic form injected here by JS -->
-      <div id="executor-form" class="px-6 pb-4 hidden">
+      <!-- Selected item header -->
+      <div id="executor-header" class="px-6 pt-4 pb-0 hidden">
         <div class="flex items-center justify-between mb-3">
           <div>
-            <span class="text-xs text-gray-500 uppercase tracking-wider">Tool</span>
-            <p class="text-sm font-semibold text-indigo-300" id="selected-tool-name"></p>
+            <span id="exec-type-label"
+              class="text-xs uppercase tracking-wider font-semibold text-gray-500"></span>
+            <p id="exec-item-name"
+              class="text-sm font-semibold text-indigo-300 leading-snug"></p>
+            <p id="exec-item-desc"
+              class="text-xs text-gray-500 mt-0.5 leading-relaxed"></p>
           </div>
           <button onclick="clearExecutor()"
-            class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            class="text-xs text-gray-500 hover:text-gray-300 transition-colors ml-4 shrink-0">
             ✕ Clear
           </button>
         </div>
+      </div>
 
-        <!-- Arguments JSON editor -->
-        <label class="block text-xs text-gray-400 mb-1">Arguments <span class="text-gray-600">(JSON)</span></label>
-        <textarea id="tool-args" rows="6"
+      <!-- ── Tool executor ── -->
+      <div id="exec-tool" class="px-6 pb-4 hidden">
+        <label class="block text-xs text-gray-400 mb-1">
+          Arguments <span class="text-gray-600">(JSON)</span>
+        </label>
+        <textarea id="tool-args" rows="5"
           class="w-full bg-gray-800 border border-gray-700 focus:border-indigo-500 outline-none rounded-lg px-3 py-2 text-sm text-gray-100 font-mono resize-y transition-colors"
           placeholder='{ "param": "value" }'></textarea>
-
-        <!-- Schema hint -->
         <div id="schema-hint" class="mt-2 text-xs text-gray-600 leading-relaxed hidden">
           <span class="text-gray-500 font-medium">Schema:</span>
           <pre id="schema-text" class="mt-1 overflow-x-auto text-gray-600 whitespace-pre-wrap"></pre>
         </div>
-
         <div class="flex gap-2 mt-3">
-          <button onclick="callTool()"
-            id="btn-call-tool"
+          <button onclick="executeTool()" id="btn-call-tool"
             class="flex-1 bg-emerald-700 hover:bg-emerald-600 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             Execute
           </button>
           <button onclick="toggleSchema()"
-            id="btn-schema"
             class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 text-sm px-4 py-2 rounded-lg transition-colors">
             Schema
           </button>
         </div>
+      </div>
+
+      <!-- ── Prompt executor ── -->
+      <div id="exec-prompt" class="px-6 pb-4 hidden">
+        <div id="prompt-args-container" class="mb-3 space-y-2"></div>
+        <button onclick="executePrompt()" id="btn-get-prompt"
+          class="w-full bg-purple-700 hover:bg-purple-600 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3-3-3z"/>
+          </svg>
+          Get Prompt
+        </button>
+      </div>
+
+      <!-- ── Resource executor ── -->
+      <div id="exec-resource" class="px-6 pb-4 hidden">
+        <div class="mb-3">
+          <span class="text-xs text-gray-500">URI</span>
+          <p id="resource-uri-display"
+            class="text-xs text-amber-300 break-all mt-0.5 font-mono"></p>
+          <span id="resource-mime-display"
+            class="inline-block mt-1 text-xs bg-gray-800 text-gray-500 border border-gray-700 rounded px-2 py-0.5"></span>
+        </div>
+        <button onclick="executeResource()" id="btn-read-resource"
+          class="w-full bg-amber-700 hover:bg-amber-600 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          Read Resource
+        </button>
       </div>
     </section>
 
@@ -154,214 +244,464 @@
     <section class="flex-1 flex flex-col overflow-hidden bg-gray-950 px-6 py-4">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-sm font-semibold text-gray-300">Result</h2>
-        <button onclick="clearResult()" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">Clear</button>
+        <button onclick="clearResult()"
+          class="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+          Clear
+        </button>
       </div>
       <div id="result-pane"
         class="flex-1 overflow-y-auto bg-gray-900 border border-gray-800 rounded-lg p-4 result-scroll">
         <p class="text-xs text-gray-700">No result yet.</p>
       </div>
     </section>
-
   </main>
 </div>
 
 <!-- ── JavaScript ─────────────────────────────────────────────────────────── -->
 <script>
-  let selectedTool = null;   // { name, description, inputSchema }
+  // ── State ────────────────────────────────────────────────────────────────
+  let selectedItem = null;  // { type: 'tool'|'prompt'|'resource', data: {...} }
+  let activeTab    = 'tools';
   let schemaVisible = false;
 
-  /* ── List tools ─────────────────────────────────────────────────── */
-  async function listTools() {
-    const btn    = document.getElementById('btn-list-tools');
-    const container = document.getElementById('tools-container');
+  // ── Tab switching ─────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    activeTab = tab;
+    ['tools', 'prompts', 'resources'].forEach(t => {
+      document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
+      const btn = document.getElementById(`tab-btn-${t}`);
+      btn.className = btn.className.replace(/tab-(active|inactive)/g, '');
+      btn.classList.add(t === tab ? 'tab-active' : 'tab-inactive');
+    });
+  }
 
+  // ── Connect & load all ────────────────────────────────────────────────────
+  async function connectAll() {
+    const btn = document.getElementById('btn-connect');
     btn.disabled = true;
-    btn.innerHTML = `<span class="spinner">⟳</span> Connecting…`;
-    container.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">Connecting to MCP server…</p>';
+    btn.innerHTML = '<span class="spinner">⟳</span> Connecting…';
 
+    // Show loading state in all panels
+    ['tools', 'prompts', 'resources'].forEach(t => {
+      document.getElementById(`panel-${t}`).innerHTML =
+        `<p class="text-xs text-gray-500 text-center mt-8">Loading…</p>`;
+      document.getElementById(`tab-cnt-${t}`).textContent = '';
+    });
+
+    await Promise.allSettled([
+      loadTools(),
+      loadPrompts(),
+      loadResources(),
+    ]);
+
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
+      </svg>
+      Refresh All`;
+  }
+
+  // ── Load tools ────────────────────────────────────────────────────────────
+  async function loadTools() {
     try {
-      const resp = await fetch('/api/tools');
+      const resp = await fetch('/api/tools', { credentials: 'same-origin' });
       const data = await resp.json();
-
       if (!resp.ok || data.error) {
-        showError(container, data.error || 'Unknown error');
+        showPanelError('tools', data.error || 'Unknown error');
         return;
       }
-
-      renderTools(data.tools);
+      renderTools(data.tools || []);
     } catch (e) {
-      showError(container, e.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = `
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
-        </svg>
-        Refresh Tools`;
+      showPanelError('tools', e.message);
     }
   }
 
   function renderTools(tools) {
-    const container = document.getElementById('tools-container');
+    const panel = document.getElementById('panel-tools');
+    document.getElementById('tab-cnt-tools').textContent =
+      tools.length ? `(${tools.length})` : '';
 
-    if (!tools || tools.length === 0) {
-      container.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">Server returned no tools.</p>';
+    if (!tools.length) {
+      panel.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">No tools available.</p>';
       return;
     }
-
-    container.innerHTML = `<p class="text-xs text-gray-500 mb-3">${tools.length} tool${tools.length !== 1 ? 's' : ''} available</p>`;
-
+    panel.innerHTML = '';
     tools.forEach(tool => {
       const card = document.createElement('div');
-      card.className = 'tool-card cursor-pointer bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded-lg p-3 mb-2 transition-colors fade-in';
+      card.className = 'item-card cursor-pointer bg-gray-800 border rounded-lg p-3 mb-2 transition-colors fade-in';
       card.onclick = () => selectTool(tool);
       card.innerHTML = `
         <p class="text-sm font-semibold text-indigo-300 leading-none mb-1">${escHtml(tool.name)}</p>
         <p class="text-xs text-gray-400 leading-relaxed line-clamp-2">${escHtml(tool.description || 'No description')}</p>
       `;
-      container.appendChild(card);
+      panel.appendChild(card);
     });
   }
 
-  /* ── Select a tool ──────────────────────────────────────────────── */
-  function selectTool(tool) {
-    selectedTool = tool;
-    document.getElementById('selected-tool-name').textContent = tool.name;
-    document.getElementById('executor-hint').classList.add('hidden');
-    document.getElementById('executor-form').classList.remove('hidden');
+  // ── Load prompts ──────────────────────────────────────────────────────────
+  async function loadPrompts() {
+    try {
+      const resp = await fetch('/api/prompts', { credentials: 'same-origin' });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        showPanelError('prompts', data.error || 'Unknown error');
+        return;
+      }
+      renderPrompts(data.prompts || []);
+    } catch (e) {
+      showPanelError('prompts', e.message);
+    }
+  }
 
-    // Pre-fill args textarea with empty object or example skeleton
-    const schema = tool.inputSchema || {};
-    const props  = schema.properties || {};
+  function renderPrompts(prompts) {
+    const panel = document.getElementById('panel-prompts');
+    document.getElementById('tab-cnt-prompts').textContent =
+      prompts.length ? `(${prompts.length})` : '';
+
+    if (!prompts.length) {
+      panel.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">No prompts available.</p>';
+      return;
+    }
+    panel.innerHTML = '';
+    prompts.forEach(prompt => {
+      const argCount = (prompt.arguments || []).length;
+      const card = document.createElement('div');
+      card.className = 'item-card cursor-pointer bg-gray-800 border rounded-lg p-3 mb-2 transition-colors fade-in';
+      card.onclick = () => selectPrompt(prompt);
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-2 mb-1">
+          <p class="text-sm font-semibold text-purple-300 leading-none">${escHtml(prompt.name)}</p>
+          ${argCount ? `<span class="text-xs bg-purple-900/50 text-purple-400 border border-purple-800 rounded px-1.5 py-0.5 shrink-0">${argCount} arg${argCount !== 1 ? 's' : ''}</span>` : ''}
+        </div>
+        <p class="text-xs text-gray-400 leading-relaxed line-clamp-2">${escHtml(prompt.description || 'No description')}</p>
+      `;
+      panel.appendChild(card);
+    });
+  }
+
+  // ── Load resources ────────────────────────────────────────────────────────
+  async function loadResources() {
+    try {
+      const resp = await fetch('/api/resources', { credentials: 'same-origin' });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        showPanelError('resources', data.error || 'Unknown error');
+        return;
+      }
+      renderResources(data.resources || []);
+    } catch (e) {
+      showPanelError('resources', e.message);
+    }
+  }
+
+  function renderResources(resources) {
+    const panel = document.getElementById('panel-resources');
+    document.getElementById('tab-cnt-resources').textContent =
+      resources.length ? `(${resources.length})` : '';
+
+    if (!resources.length) {
+      panel.innerHTML = '<p class="text-xs text-gray-500 text-center mt-8">No resources available.</p>';
+      return;
+    }
+    panel.innerHTML = '';
+    resources.forEach(res => {
+      const card = document.createElement('div');
+      card.className = 'item-card cursor-pointer bg-gray-800 border rounded-lg p-3 mb-2 transition-colors fade-in';
+      card.onclick = () => selectResource(res);
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-2 mb-1">
+          <p class="text-sm font-semibold text-amber-300 leading-none">${escHtml(res.name || res.uri)}</p>
+          ${res.mimeType ? `<span class="text-xs bg-gray-700 text-gray-400 border border-gray-600 rounded px-1.5 py-0.5 shrink-0 font-mono">${escHtml(res.mimeType)}</span>` : ''}
+        </div>
+        <p class="text-xs text-gray-600 font-mono break-all leading-relaxed line-clamp-1">${escHtml(res.uri)}</p>
+        ${res.description ? `<p class="text-xs text-gray-400 mt-1 leading-relaxed line-clamp-1">${escHtml(res.description)}</p>` : ''}
+      `;
+      panel.appendChild(card);
+    });
+  }
+
+  // ── Select helpers ────────────────────────────────────────────────────────
+  function showExecutorHeader(typeLabel, name, desc) {
+    document.getElementById('exec-type-label').textContent = typeLabel;
+    document.getElementById('exec-item-name').textContent  = name;
+    document.getElementById('exec-item-desc').textContent  = desc;
+    document.getElementById('executor-empty').classList.add('hidden');
+    document.getElementById('executor-header').classList.remove('hidden');
+    ['exec-tool', 'exec-prompt', 'exec-resource'].forEach(id =>
+      document.getElementById(id).classList.add('hidden'));
+    clearResult();
+  }
+
+  function selectTool(tool) {
+    selectedItem = { type: 'tool', data: tool };
+    schemaVisible = false;
+    showExecutorHeader('Tool', tool.name, tool.description || '');
+
+    // Pre-fill args from schema
+    const props = (tool.inputSchema || {}).properties || {};
     const example = {};
     Object.entries(props).forEach(([k, v]) => {
-      if      (v.type === 'string')  example[k] = '';
+      if      (v.type === 'string')                    example[k] = '';
       else if (v.type === 'number' || v.type === 'integer') example[k] = 0;
-      else if (v.type === 'boolean') example[k] = false;
-      else if (v.type === 'array')   example[k] = [];
-      else                           example[k] = null;
+      else if (v.type === 'boolean')                   example[k] = false;
+      else if (v.type === 'array')                     example[k] = [];
+      else                                             example[k] = null;
     });
     document.getElementById('tool-args').value =
       Object.keys(example).length ? JSON.stringify(example, null, 2) : '{}';
-
-    // Populate schema hint
     document.getElementById('schema-text').textContent =
-      JSON.stringify(schema, null, 2);
-    schemaVisible = false;
+      JSON.stringify(tool.inputSchema || {}, null, 2);
     document.getElementById('schema-hint').classList.add('hidden');
+    document.getElementById('exec-tool').classList.remove('hidden');
+  }
 
-    // Clear previous result
-    document.getElementById('result-pane').innerHTML =
-      '<p class="text-xs text-gray-700">No result yet.</p>';
+  function selectPrompt(prompt) {
+    selectedItem = { type: 'prompt', data: prompt };
+    showExecutorHeader('Prompt', prompt.name, prompt.description || '');
+
+    const args = prompt.arguments || [];
+    const container = document.getElementById('prompt-args-container');
+    if (!args.length) {
+      container.innerHTML = '<p class="text-xs text-gray-600 mb-1">No arguments required.</p>';
+    } else {
+      container.innerHTML = args.map(a => `
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            ${escHtml(a.name)}
+            ${a.required ? '<span class="text-red-400 ml-0.5">*</span>' : ''}
+            ${a.description ? `<span class="text-gray-600 ml-1">— ${escHtml(a.description)}</span>` : ''}
+          </label>
+          <input type="text" id="prompt-arg-${escAttr(a.name)}"
+            class="w-full bg-gray-800 border border-gray-700 focus:border-purple-500 outline-none rounded-lg px-3 py-1.5 text-sm text-gray-100 transition-colors"
+            placeholder="${a.required ? 'required' : 'optional'}">
+        </div>
+      `).join('');
+    }
+    document.getElementById('exec-prompt').classList.remove('hidden');
+  }
+
+  function selectResource(res) {
+    selectedItem = { type: 'resource', data: res };
+    showExecutorHeader('Resource', res.name || res.uri, res.description || '');
+    document.getElementById('resource-uri-display').textContent  = res.uri;
+    document.getElementById('resource-mime-display').textContent = res.mimeType || '';
+    document.getElementById('resource-mime-display').classList.toggle('hidden', !res.mimeType);
+    document.getElementById('exec-resource').classList.remove('hidden');
   }
 
   function clearExecutor() {
-    selectedTool = null;
-    document.getElementById('executor-form').classList.add('hidden');
-    document.getElementById('executor-hint').classList.remove('hidden');
-    document.getElementById('executor-hint').textContent = 'Select a tool from the list on the left.';
+    selectedItem = null;
+    document.getElementById('executor-header').classList.add('hidden');
+    ['exec-tool', 'exec-prompt', 'exec-resource'].forEach(id =>
+      document.getElementById(id).classList.add('hidden'));
+    document.getElementById('executor-empty').classList.remove('hidden');
+    clearResult();
   }
 
   function toggleSchema() {
     schemaVisible = !schemaVisible;
-    const hint = document.getElementById('schema-hint');
-    hint.classList.toggle('hidden', !schemaVisible);
+    document.getElementById('schema-hint').classList.toggle('hidden', !schemaVisible);
   }
 
-  /* ── Call tool ──────────────────────────────────────────────────── */
-  async function callTool() {
-    if (!selectedTool) return;
+  // ── Execute: tool ─────────────────────────────────────────────────────────
+  async function executeTool() {
+    if (!selectedItem || selectedItem.type !== 'tool') return;
 
     let args = {};
     const raw = document.getElementById('tool-args').value.trim();
     if (raw && raw !== '{}') {
-      try {
-        args = JSON.parse(raw);
-      } catch (e) {
-        showResultError('Invalid JSON in arguments: ' + e.message);
-        return;
-      }
+      try { args = JSON.parse(raw); }
+      catch (e) { showResultError('Invalid JSON in arguments: ' + e.message); return; }
     }
 
     const btn = document.getElementById('btn-call-tool');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner">⟳</span> Running…';
-
-    const resultPane = document.getElementById('result-pane');
-    resultPane.innerHTML = '<p class="text-xs text-gray-500 animate-pulse">Executing…</p>';
+    setLoading(btn, 'Running…');
+    setResultLoading();
 
     try {
       const resp = await fetch('/api/call-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tool_name: selectedTool.name, arguments: args }),
+        credentials: 'same-origin',
+        body: JSON.stringify({ tool_name: selectedItem.data.name, arguments: args }),
       });
       const data = await resp.json();
-
-      if (!resp.ok || data.error) {
-        showResultError(data.error || 'Unknown error');
-        return;
-      }
-
-      renderResult(data);
+      if (!resp.ok || data.error) { showResultError(data.error || 'Unknown error'); return; }
+      renderToolResult(data);
     } catch (e) {
       showResultError(e.message);
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = `
+      setLoadingDone(btn, `
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        Execute`;
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>Execute`);
     }
   }
 
-  /* ── Render helpers ─────────────────────────────────────────────── */
-  function renderResult(data) {
-    const pane = document.getElementById('result-pane');
-    const isError = data.isError;
+  // ── Execute: prompt ───────────────────────────────────────────────────────
+  async function executePrompt() {
+    if (!selectedItem || selectedItem.type !== 'prompt') return;
 
-    let html = `
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-xs font-semibold ${isError ? 'text-red-400' : 'text-emerald-400'}">
-          ${isError ? '✗ Tool returned an error' : '✓ Success'}
-        </span>
-        <span class="text-xs text-gray-600">${new Date().toLocaleTimeString()}</span>
-      </div>`;
-
-    (data.content || []).forEach((item, i) => {
-      if (item.type === 'text') {
-        // Try to pretty-print JSON text responses
-        let display = item.text;
-        try {
-          const parsed = JSON.parse(item.text);
-          display = JSON.stringify(parsed, null, 2);
-        } catch {}
-        html += `
-          <div class="fade-in mb-2">
-            <span class="text-xs text-gray-600 uppercase tracking-wider">text</span>
-            <pre class="mt-1 text-sm text-gray-200 whitespace-pre-wrap break-all leading-relaxed">${escHtml(display)}</pre>
-          </div>`;
-      } else {
-        html += `
-          <div class="fade-in mb-2">
-            <span class="text-xs text-gray-600 uppercase tracking-wider">${escHtml(item.type || 'blob')}</span>
-            <pre class="mt-1 text-xs text-gray-400 overflow-x-auto">${escHtml(JSON.stringify(item, null, 2))}</pre>
-          </div>`;
-      }
+    const promptArgs = {};
+    (selectedItem.data.arguments || []).forEach(a => {
+      const el = document.getElementById(`prompt-arg-${escAttr(a.name)}`);
+      if (el && el.value.trim()) promptArgs[a.name] = el.value.trim();
     });
 
-    if (!data.content || data.content.length === 0) {
-      html += '<p class="text-xs text-gray-600">Tool returned empty content.</p>';
-    }
+    const btn = document.getElementById('btn-get-prompt');
+    setLoading(btn, 'Getting…');
+    setResultLoading();
 
-    pane.innerHTML = html;
+    try {
+      const resp = await fetch('/api/get-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ prompt_name: selectedItem.data.name, arguments: promptArgs }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) { showResultError(data.error || 'Unknown error'); return; }
+      renderPromptResult(data);
+    } catch (e) {
+      showResultError(e.message);
+    } finally {
+      setLoadingDone(btn, `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3-3-3z"/>
+        </svg>Get Prompt`);
+    }
   }
 
-  function showError(el, msg) {
-    el.innerHTML = `<p class="text-xs text-red-400 mt-4">Error: ${escHtml(msg)}</p>`;
+  // ── Execute: resource ─────────────────────────────────────────────────────
+  async function executeResource() {
+    if (!selectedItem || selectedItem.type !== 'resource') return;
+
+    const btn = document.getElementById('btn-read-resource');
+    setLoading(btn, 'Reading…');
+    setResultLoading();
+
+    try {
+      const resp = await fetch('/api/read-resource', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ uri: selectedItem.data.uri }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) { showResultError(data.error || 'Unknown error'); return; }
+      renderResourceResult(data);
+    } catch (e) {
+      showResultError(e.message);
+    } finally {
+      setLoadingDone(btn, `
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>Read Resource`);
+    }
+  }
+
+  // ── Result renderers ──────────────────────────────────────────────────────
+  function renderToolResult(data) {
+    const isError = data.isError;
+    let html = resultHeader(isError ? '✗ Tool returned an error' : '✓ Success', isError);
+    (data.content || []).forEach(item => {
+      if (item.type === 'text') {
+        let display = item.text;
+        try { display = JSON.stringify(JSON.parse(item.text), null, 2); } catch {}
+        html += contentBlock('text', `<pre class="text-sm text-gray-200 whitespace-pre-wrap break-all leading-relaxed">${escHtml(display)}</pre>`);
+      } else {
+        html += contentBlock(item.type || 'blob',
+          `<pre class="text-xs text-gray-400 overflow-x-auto">${escHtml(JSON.stringify(item, null, 2))}</pre>`);
+      }
+    });
+    if (!data.content || !data.content.length)
+      html += '<p class="text-xs text-gray-600">Tool returned empty content.</p>';
+    document.getElementById('result-pane').innerHTML = html;
+  }
+
+  function renderPromptResult(data) {
+    const msgs = data.messages || [];
+    let html = resultHeader(`✓ ${msgs.length} message${msgs.length !== 1 ? 's' : ''}`, false);
+    if (data.description) {
+      html += `<p class="text-xs text-gray-500 mb-3 italic">${escHtml(data.description)}</p>`;
+    }
+    msgs.forEach(msg => {
+      const roleColor = msg.role === 'user' ? 'text-blue-400' : 'text-emerald-400';
+      const roleLabel = msg.role === 'user' ? 'user' : 'assistant';
+      if (msg.type === 'text') {
+        html += `
+          <div class="fade-in mb-3 border border-gray-800 rounded-lg overflow-hidden">
+            <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border-b border-gray-700">
+              <span class="text-xs font-semibold ${roleColor}">${escHtml(roleLabel)}</span>
+              <span class="text-xs text-gray-600">text</span>
+            </div>
+            <pre class="px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-all leading-relaxed">${escHtml(msg.text)}</pre>
+          </div>`;
+      } else {
+        html += contentBlock(`${roleLabel} · ${msg.type}`,
+          `<pre class="text-xs text-gray-400">${escHtml(JSON.stringify(msg, null, 2))}</pre>`);
+      }
+    });
+    if (!msgs.length)
+      html += '<p class="text-xs text-gray-600">Prompt returned no messages.</p>';
+    document.getElementById('result-pane').innerHTML = html;
+  }
+
+  function renderResourceResult(data) {
+    const contents = data.contents || [];
+    let html = resultHeader(`✓ ${contents.length} content item${contents.length !== 1 ? 's' : ''}`, false);
+    contents.forEach(item => {
+      if (item.type === 'text') {
+        let display = item.text;
+        try { display = JSON.stringify(JSON.parse(item.text), null, 2); } catch {}
+        html += `
+          <div class="fade-in mb-3">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <span class="text-xs text-gray-600 uppercase tracking-wider">text</span>
+              ${item.mimeType ? `<span class="text-xs text-gray-600 font-mono">${escHtml(item.mimeType)}</span>` : ''}
+            </div>
+            <pre class="text-sm text-gray-200 whitespace-pre-wrap break-all leading-relaxed">${escHtml(display)}</pre>
+          </div>`;
+      } else if (item.type === 'blob') {
+        html += contentBlock(`blob · ${item.mimeType || 'unknown'}`,
+          `<p class="text-xs text-gray-500">Base64 data (${(item.blob || '').length} chars)</p>
+           <pre class="text-xs text-gray-700 overflow-x-auto">${escHtml((item.blob || '').substring(0, 200))}${(item.blob || '').length > 200 ? '…' : ''}</pre>`);
+      } else {
+        html += contentBlock(item.type || 'unknown',
+          `<pre class="text-xs text-gray-400">${escHtml(JSON.stringify(item, null, 2))}</pre>`);
+      }
+    });
+    if (!contents.length)
+      html += '<p class="text-xs text-gray-600">Resource returned empty contents.</p>';
+    document.getElementById('result-pane').innerHTML = html;
+  }
+
+  // ── UI helpers ────────────────────────────────────────────────────────────
+  function resultHeader(label, isError) {
+    return `<div class="flex items-center gap-2 mb-3">
+      <span class="text-xs font-semibold ${isError ? 'text-red-400' : 'text-emerald-400'}">${escHtml(label)}</span>
+      <span class="text-xs text-gray-600">${new Date().toLocaleTimeString()}</span>
+    </div>`;
+  }
+
+  function contentBlock(typeLabel, innerHtml) {
+    return `<div class="fade-in mb-3">
+      <span class="text-xs text-gray-600 uppercase tracking-wider">${escHtml(typeLabel)}</span>
+      <div class="mt-1">${innerHtml}</div>
+    </div>`;
+  }
+
+  function showPanelError(tab, msg) {
+    document.getElementById(`panel-${tab}`).innerHTML =
+      `<p class="text-xs text-red-400 mt-4 text-center">Error: ${escHtml(msg)}</p>`;
+    document.getElementById(`tab-cnt-${tab}`).textContent = '(err)';
   }
 
   function showResultError(msg) {
@@ -372,17 +712,85 @@
       </div>`;
   }
 
+  function setResultLoading() {
+    document.getElementById('result-pane').innerHTML =
+      '<p class="text-xs text-gray-500 animate-pulse">Executing…</p>';
+  }
+
   function clearResult() {
     document.getElementById('result-pane').innerHTML =
       '<p class="text-xs text-gray-700">No result yet.</p>';
   }
 
+  function setLoading(btn, label) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner">⟳</span> ${label}`;
+  }
+
+  function setLoadingDone(btn, html) {
+    btn.disabled = false;
+    btn.innerHTML = html;
+  }
+
   function escHtml(str) {
     return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function escAttr(str) {
+    return String(str).replace(/[^a-zA-Z0-9_-]/g, '_');
+  }
+
+  // ── Server config edit ────────────────────────────────────────────────────
+  function toggleServerEdit() {
+    const display = document.getElementById('server-display');
+    const edit    = document.getElementById('server-edit');
+    const editing = !edit.classList.contains('hidden');
+    display.classList.toggle('hidden',  !editing);
+    edit.classList.toggle('hidden', editing);
+    if (!editing) {
+      // Sync input with current display value when opening
+      document.getElementById('input-url').value =
+        document.getElementById('display-url').textContent.trim();
+    }
+  }
+
+  async function applyServerConfig() {
+    const url       = document.getElementById('input-url').value.trim();
+    const transport = document.getElementById('input-transport').value;
+    if (!url) return;
+
+    try {
+      const resp = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ mcp_server_url: url, mcp_transport: transport }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { alert(data.error || 'Config update failed'); return; }
+
+      // Update display labels
+      document.getElementById('display-url').textContent       = data.mcp_server_url;
+      document.getElementById('display-transport').textContent = data.mcp_transport;
+      toggleServerEdit();
+
+      // Reset all tab panels
+      ['tools', 'prompts', 'resources'].forEach(t => {
+        document.getElementById(`panel-${t}`).innerHTML =
+          '<p class="text-xs text-gray-600 text-center mt-8">Click Connect to load.</p>';
+        document.getElementById(`tab-cnt-${t}`).textContent = '';
+      });
+      clearExecutor();
+
+      // If URL changed, auth was cleared → reload to update auth badge
+      if (data.auth_cleared) {
+        window.location.reload();
+      }
+    } catch (e) {
+      alert('Error: ' + e.message);
+    }
   }
 </script>
 </body>

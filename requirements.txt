@@ -14,4 +14,4 @@ httpx==0.28.0
 # Official MCP Python SDK (includes SSE + Streamable HTTP transports)
 # Pin to >=1.0 for stable ClientSession + sse_client API
 # Upgrade to >=1.2 to enable MCP_TRANSPORT=streamable_http
-mcp>=1.0.0,<2.0.0
+mcp>=1.2.0,<2.0.0
