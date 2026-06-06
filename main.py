@@ -381,6 +381,15 @@ async def logout(request: Request):
     return RedirectResponse("/")
 
 
+@app.post("/api/disconnect")
+async def disconnect(request: Request):
+    """Drop the OAuth token from the session without clearing server config."""
+    request.session.pop("access_token", None)
+    request.session.pop("refresh_token", None)
+    request.session.pop("user_email", None)
+    return JSONResponse({"disconnected": True})
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MCP API routes  (called by the browser via fetch())
 # ─────────────────────────────────────────────────────────────────────────────

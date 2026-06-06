@@ -102,12 +102,20 @@
     <div class="px-4 py-3 border-b border-gray-800">
       {% if authenticated %}
         <button id="btn-connect" onclick="connectAll()"
-          class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2">
+          class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-2 rounded-lg transition-colors font-medium flex items-center justify-center gap-2 mb-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 6h16M4 10h16M4 14h8M4 18h8"/>
           </svg>
           Connect &amp; Load All
+        </button>
+        <button onclick="disconnect()"
+          class="w-full bg-gray-800 hover:bg-red-900/40 border border-gray-700 hover:border-red-800 text-gray-400 hover:text-red-400 text-xs py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+          </svg>
+          Disconnect
         </button>
       {% else %}
         <button disabled
@@ -273,6 +281,15 @@
       btn.className = btn.className.replace(/tab-(active|inactive)/g, '');
       btn.classList.add(t === tab ? 'tab-active' : 'tab-inactive');
     });
+  }
+
+  // ── Disconnect ────────────────────────────────────────────────────────────
+  async function disconnect() {
+    try {
+      await fetch('/api/disconnect', { method: 'POST', credentials: 'same-origin' });
+    } finally {
+      window.location.reload();
+    }
   }
 
   // ── Connect & load all ────────────────────────────────────────────────────
